@@ -1,0 +1,1137 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rota do Arqueólogo</title>
+<style>
+  :root {
+    --bg-deep:    #0d1117;
+    --bg-panel:   #161b22;
+    --bg-card:    #1c2128;
+    --bg-hover:   #262c36;
+    --border:     #30363d;
+    --text-main:  #e6edf3;
+    --text-muted: #8b949e;
+    --text-dim:   #484f58;
+    --accent:     #f0a500;
+    --accent-dim: #7a5200;
+    --blue:       #58a6ff;
+    --green:      #3fb950;
+    --red:        #f85149;
+    --purple:     #bc8cff;
+    --teal:       #39d353;
+    --map-bg:     #0a0e14;
+    --tile-grid:  rgba(255,255,255,0.03);
+    --obstacle:   #1a2236;
+    --obstacle2:  #111827;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    background: var(--bg-deep);
+    color: var(--text-main);
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    user-select: none;
+  }
+
+  /* ── Header ── */
+  #hdr {
+    height: 48px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    gap: 20px;
+    flex-shrink: 0;
+    z-index: 10;
+  }
+  #hdr h1 {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--accent);
+    letter-spacing: .02em;
+  }
+  .hstat {
+    font-size: 12px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+  }
+  .hstat b { color: var(--text-main); font-weight: 600; font-size: 14px; }
+  .sep { color: var(--border); font-size: 18px; margin: 0 4px; }
+
+  /* ── Layout ── */
+  #layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── Canvas ── */
+  #map-wrap {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+    background: var(--map-bg);
+    cursor: crosshair;
+  }
+  canvas { display: block; }
+
+  /* ── Toast ── */
+  #toast {
+    position: absolute;
+    top: 14px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 18px;
+    font-size: 13px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .25s;
+    white-space: nowrap;
+    z-index: 100;
+    box-shadow: 0 4px 16px rgba(0,0,0,.5);
+  }
+  #toast.on { opacity: 1; }
+
+  /* ── Info overlay on map ── */
+  #map-info {
+    position: absolute;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0,0,0,.75);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 7px 12px;
+    font-size: 11px;
+    color: var(--text-muted);
+    pointer-events: none;
+    display: none;
+  }
+  #map-info b { color: var(--blue); }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 290px;
+    background: var(--bg-panel);
+    border-left: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    flex-shrink: 0;
+  }
+
+  .s-section {
+    border-bottom: 1px solid var(--border);
+    padding: 12px 14px;
+  }
+  .s-section:last-child { border-bottom: none; }
+
+  .s-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  /* Buttons */
+  .btn-row { display: flex; gap: 8px; margin-bottom: 6px; }
+  .btn {
+    flex: 1;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    color: var(--text-main);
+    font-size: 12px;
+    font-family: inherit;
+    padding: 7px 10px;
+    cursor: pointer;
+    transition: background .15s, border-color .15s;
+    text-align: center;
+  }
+  .btn:hover { background: var(--bg-hover); border-color: #484f58; }
+  .btn:active { transform: scale(.97); }
+  .btn.accent { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
+  .btn.accent:hover { background: #8a5e00; }
+  .btn.blue  { background: rgba(88,166,255,.12); border-color: rgba(88,166,255,.4); color: var(--blue); }
+  .btn.blue:hover  { background: rgba(88,166,255,.2); }
+  .btn.green { background: rgba(63,185,80,.12); border-color: rgba(63,185,80,.4); color: var(--green); }
+  .btn.green:hover { background: rgba(63,185,80,.2); }
+  .btn.red   { background: rgba(248,81,73,.1); border-color: rgba(248,81,73,.35); color: var(--red); }
+  .btn.red:hover { background: rgba(248,81,73,.2); }
+  .btn:disabled { opacity: .4; cursor: not-allowed; }
+
+  /* Weight bar */
+  .wbar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+  .wbar-label { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+  .wbar-track {
+    flex: 1;
+    height: 6px;
+    background: var(--bg-card);
+    border-radius: 3px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+  }
+  .wbar-fill {
+    height: 100%;
+    background: var(--blue);
+    border-radius: 3px;
+    transition: width .3s, background .3s;
+  }
+  .wbar-fill.danger { background: var(--red); }
+  .wbar-val { font-size: 11px; color: var(--text-muted); white-space: nowrap; }
+
+  /* Inventory list */
+  #inv-scroll { overflow-y: auto; flex: 1; }
+  .inv-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 12px;
+  }
+  .inv-item:last-child { border-bottom: none; }
+  .inv-emoji {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 17px;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+    background: var(--bg-card);
+  }
+  .inv-name { flex: 1; color: var(--text-main); }
+  .inv-tags { display: flex; gap: 4px; }
+  .tag {
+    font-size: 10px;
+    padding: 2px 6px;
+    border-radius: 4px;
+    font-weight: 500;
+  }
+  .tag.weight { background: rgba(248,81,73,.15); color: #f85149; }
+  .tag.value  { background: rgba(240,165,0,.15); color: #f0a500; }
+  .inv-empty { font-size: 12px; color: var(--text-dim); padding: 8px 0; }
+
+  /* Algo log */
+  #algo-scroll { flex: 1; overflow-y: auto; padding: 12px 14px; }
+  .algo-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+  .algo-card h3 { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .algo-card p  { color: var(--text-muted); line-height: 1.5; font-size: 11px; }
+  .algo-badge {
+    display: inline-block;
+    font-size: 10px;
+    font-weight: 600;
+    padding: 2px 7px;
+    border-radius: 4px;
+    margin-bottom: 5px;
+    letter-spacing: .03em;
+  }
+  .ab-tsp    { background: rgba(88,166,255,.15); color: var(--blue); border: 1px solid rgba(88,166,255,.3); }
+  .ab-bfs    { background: rgba(63,185,80,.15);  color: var(--green); border: 1px solid rgba(63,185,80,.3); }
+  .ab-knap   { background: rgba(240,165,0,.15);  color: var(--accent); border: 1px solid rgba(240,165,0,.3); }
+  .algo-stat { margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--border); color: var(--text-muted); font-size: 11px; }
+  .algo-stat b { color: var(--text-main); }
+
+  /* Overlay */
+  #overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,.88);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 200;
+    backdrop-filter: blur(4px);
+  }
+  .modal {
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 32px 28px;
+    max-width: 460px;
+    width: 92%;
+    text-align: center;
+  }
+  .modal-icon { font-size: 48px; margin-bottom: 12px; }
+  .modal h2 { font-size: 22px; font-weight: 700; margin-bottom: 8px; color: var(--accent); }
+  .modal p  { color: var(--text-muted); font-size: 14px; margin-bottom: 16px; line-height: 1.6; }
+  .modal .big { font-size: 36px; font-weight: 700; color: var(--accent); margin: 8px 0; }
+  .how-to {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 9px;
+    padding: 12px 14px;
+    text-align: left;
+    margin-bottom: 18px;
+    font-size: 13px;
+  }
+  .how-to div { padding: 4px 0; color: var(--text-muted); }
+  .how-to b   { color: var(--text-main); }
+  .modal-btns { display: flex; gap: 10px; justify-content: center; }
+
+  /* Level badge */
+  .lvl-badge {
+    background: rgba(240,165,0,.12);
+    border: 1px solid rgba(240,165,0,.3);
+    border-radius: 6px;
+    padding: 2px 10px;
+    font-size: 12px;
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  ::-webkit-scrollbar { width: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<div id="hdr">
+  <h1>🏺 Rota do Arqueólogo</h1>
+  <span class="lvl-badge" id="lvl-badge">Nível 1</span>
+  <div class="sep">|</div>
+  <div class="hstat">⭐ <b id="h-pts">0</b> pts</div>
+  <div class="hstat">💎 Coletados: <b id="h-col">0</b>/<b id="h-tot">0</b></div>
+  <div class="hstat" id="h-tsp-dist" style="display:none">🗺️ Rota TSP: <b id="h-dist">—</b> tiles</div>
+</div>
+
+<!-- Main -->
+<div id="layout">
+
+  <!-- Map -->
+  <div id="map-wrap">
+    <canvas id="gc"></canvas>
+    <div id="toast"></div>
+    <div id="map-info">Rota TSP: <b id="mi-algo">—</b> · Distância: <b id="mi-dist">—</b></div>
+  </div>
+
+  <!-- Sidebar -->
+  <div id="sidebar">
+
+    <!-- Controls -->
+    <div class="s-section">
+      <div class="s-label">Controles</div>
+      <div class="btn-row">
+        <button class="btn accent" id="btn-tsp" onclick="runTSP()">🗺️ Calcular Rota TSP</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn blue" onclick="runBFS()">🔍 BFS → Base</button>
+        <button class="btn red"  onclick="clearRoutes()">✕ Limpar</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn green" onclick="nextLevel()">→ Próximo nível</button>
+      </div>
+      <div style="font-size:11px;color:var(--text-dim);margin-top:6px">
+        Clique no mapa para mover · Chegue nos artefatos para coletar
+      </div>
+    </div>
+
+    <!-- Inventory -->
+    <div class="s-section" style="flex:0 0 auto">
+      <div class="s-label">Inventário — Knapsack 0/1</div>
+      <div class="wbar-row">
+        <div class="wbar-label">Peso</div>
+        <div class="wbar-track"><div class="wbar-fill" id="wbar" style="width:0%"></div></div>
+        <div class="wbar-val"><b id="w-cur">0</b>/<b id="w-max">15</b> kg</div>
+      </div>
+    </div>
+    <div id="inv-scroll" class="s-section" style="flex:0 0 auto;max-height:180px;overflow-y:auto;padding-top:0">
+      <div id="inv-list"><div class="inv-empty">Inventário vazio</div></div>
+    </div>
+
+    <!-- Algo log -->
+    <div id="algo-scroll">
+      <div class="algo-card">
+        <div class="algo-badge ab-tsp">TSP — Held-Karp / 2-opt</div>
+        <h3>Rota mínima de coleta</h3>
+        <p>Calcula a ordem ótima para visitar todos os artefatos. Para n ≤ 12 usa Held-Karp exato O(n²·2ⁿ); para n > 12 usa heurística 2-opt O(n²).</p>
+        <div class="algo-stat" id="tsp-stat">Aguardando cálculo…</div>
+      </div>
+      <div class="algo-card">
+        <div class="algo-badge ab-bfs">BFS — Busca em Largura</div>
+        <h3>Pathfinding no grid</h3>
+        <p>Encontra o caminho mais curto até a base e move o jogador, evitando obstáculos. Complexidade O(V + E).</p>
+        <div class="algo-stat" id="bfs-stat">Aguardando execução…</div>
+      </div>
+      <div class="algo-card">
+        <div class="algo-badge ab-knap">Knapsack 0/1 — Programação Dinâmica</div>
+        <h3>Gestão do inventário</h3>
+        <p>Ao coletar, o algoritmo decide quais itens maximizam o valor total respeitando o peso máximo. O(n·W).</p>
+        <div class="algo-stat" id="knap-stat">Aguardando coleta…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Overlay -->
+<div id="overlay">
+  <div class="modal" id="modal-content">
+    <div class="modal-icon">🏺</div>
+    <h2>Rota do Arqueólogo</h2>
+    <p>Explore ruínas antigas, colete artefatos históricos e use algoritmos clássicos de Ciência da Computação para planejar a rota perfeita!</p>
+    <div class="how-to">
+      <div>🖱️ <b>Clique</b> no mapa para mover o arqueólogo</div>
+      <div>💎 <b>Colete</b> artefatos chegando até eles</div>
+      <div>🗺️ <b>Rota TSP</b> → calcula a sequência ótima de coleta</div>
+      <div>🔍 <b>BFS → Base</b> → mostra caminho até o acampamento</div>
+      <div>🎒 <b>Knapsack</b> gerencia o inventário automaticamente</div>
+    </div>
+    <div class="modal-btns">
+      <button class="btn accent" onclick="startGame()" style="font-size:14px;padding:10px 28px">
+        ⛏️ Iniciar Exploração
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  CONSTANTS & STATE
+// ═══════════════════════════════════════════════════════
+const TILE = 40;
+const MAX_WEIGHT = 15;
+
+const canvas  = document.getElementById('gc');
+const ctx     = canvas.getContext('2d');
+let CW, CH, COLS, ROWS;
+
+let gameActive = false;
+let level = 1, totalScore = 0;
+
+let base = { x:1, y:1 };
+let player = { px:0, py:0, tx:0, ty:0, path:[], moving:false };
+let artifacts = [];   // { x, y, emoji, name, weight, value, color, id, collected }
+let inventory = [];
+let obstacles = new Set();
+
+let tspRoute  = [];   // array of node objects in visit order
+let bfsPath   = [];   // array of {x,y} tiles
+
+let toastTimer = null;
+let rafId = null;
+let lastT  = 0;
+const SPEED = 180; // px/sec
+
+// ═══════════════════════════════════════════════════════
+//  ITEM CATALOG
+// ═══════════════════════════════════════════════════════
+const CATALOG = [
+  { name:'Ânfora',   emoji:'🏺', weight:3, value:8,  color:'#58a6ff' },
+  { name:'Moeda',    emoji:'🪙', weight:1, value:5,  color:'#f0a500' },
+  { name:'Estátua',  emoji:'🗿', weight:6, value:15, color:'#8b949e' },
+  { name:'Papiro',   emoji:'📜', weight:2, value:7,  color:'#f5c4b3' },
+  { name:'Espada',   emoji:'⚔️', weight:5, value:12, color:'#3fb950' },
+  { name:'Joia',     emoji:'💎', weight:2, value:10, color:'#bc8cff' },
+  { name:'Urna',     emoji:'⚱️', weight:4, value:9,  color:'#39d353' },
+  { name:'Máscara',  emoji:'🎭', weight:3, value:11, color:'#f85149' },
+  { name:'Cetro',    emoji:'🪄', weight:2, value:13, color:'#e8c96a' },
+  { name:'Tábua',    emoji:'🪨', weight:7, value:18, color:'#c9a060' },
+];
+
+// ═══════════════════════════════════════════════════════
+//  RESIZE
+// ═══════════════════════════════════════════════════════
+function resize() {
+  const wrap = document.getElementById('map-wrap');
+  canvas.width  = wrap.clientWidth;
+  canvas.height = wrap.clientHeight;
+  CW = canvas.width;
+  CH = canvas.height;
+  COLS = Math.floor(CW / TILE);
+  ROWS = Math.floor(CH / TILE);
+  if (gameActive) draw();
+}
+window.addEventListener('resize', resize);
+
+// ═══════════════════════════════════════════════════════
+//  GAME INIT
+// ═══════════════════════════════════════════════════════
+function startGame() {
+  document.getElementById('overlay').style.display = 'none';
+  gameActive = true;
+  resize();
+  buildLevel();
+  if (rafId) cancelAnimationFrame(rafId);
+  lastT = performance.now();
+  rafId = requestAnimationFrame(loop);
+}
+
+function buildLevel() {
+  obstacles.clear();
+  artifacts = [];
+  tspRoute  = [];
+  bfsPath   = [];
+
+  base = { x:1, y:1 };
+  player.px = base.x * TILE + TILE / 2;
+  player.py = base.y * TILE + TILE / 2;
+  player.path   = [];
+  player.moving = false;
+
+  // Obstacles — ~14% of map + extra per level
+  const density = Math.min(0.14 + level * 0.01, 0.22);
+  const obstN   = Math.floor(COLS * ROWS * density);
+  let attempts  = 0;
+  while (obstacles.size < obstN && attempts < 5000) {
+    attempts++;
+    const ox = rnd(COLS), oy = rnd(ROWS);
+    if (ox < 3 && oy < 3) continue;   // keep spawn area clear
+    obstacles.add(`${ox},${oy}`);
+  }
+  // Guarantee base + 2-tile radius clear
+  for (let dx = -1; dx <= 1; dx++)
+    for (let dy = -1; dy <= 1; dy++)
+      obstacles.delete(`${base.x+dx},${base.y+dy}`);
+
+  // Artifacts — 4 + level, capped at 14
+  const artN = Math.min(4 + level, 14);
+  const used = new Set([`${base.x},${base.y}`]);
+  let placed = 0;
+  attempts = 0;
+  while (placed < artN && attempts < 10000) {
+    attempts++;
+    const ax = rnd(COLS), ay = rnd(ROWS);
+    const key = `${ax},${ay}`;
+    if (obstacles.has(key) || used.has(key)) continue;
+    // Guarantee reachable via BFS
+    if (!reachable(base, { x:ax, y:ay })) continue;
+    const tmpl = CATALOG[rnd(CATALOG.length)];
+    artifacts.push({ ...tmpl, x:ax, y:ay, id:placed, collected:false });
+    used.add(key);
+    placed++;
+  }
+
+  document.getElementById('tsp-stat').textContent  = 'Aguardando cálculo…';
+  document.getElementById('bfs-stat').textContent  = 'Aguardando execução…';
+  document.getElementById('knap-stat').textContent = 'Aguardando coleta…';
+  document.getElementById('map-info').style.display = 'none';
+  document.getElementById('h-tsp-dist').style.display = 'none';
+  document.getElementById('lvl-badge').textContent = `Nível ${level}`;
+
+  updateHUD();
+  renderInventory();
+}
+
+// quick BFS reachability check (no path storage)
+function reachable(from, to) {
+  const queue = [`${from.x},${from.y}`];
+  const seen  = new Set(queue);
+  const dirs  = [[1,0],[-1,0],[0,1],[0,-1]];
+  while (queue.length) {
+    const cur = queue.shift();
+    const [cx, cy] = cur.split(',').map(Number);
+    if (cx === to.x && cy === to.y) return true;
+    for (const [dx, dy] of dirs) {
+      const nx = cx + dx, ny = cy + dy;
+      const nk = `${nx},${ny}`;
+      if (nx>=0 && nx<COLS && ny>=0 && ny<ROWS && !obstacles.has(nk) && !seen.has(nk)) {
+        seen.add(nk); queue.push(nk);
+      }
+    }
+  }
+  return false;
+}
+
+// ═══════════════════════════════════════════════════════
+//  GAME LOOP
+// ═══════════════════════════════════════════════════════
+function loop(t) {
+  const dt = Math.min(t - lastT, 50) / 1000;
+  lastT = t;
+  update(dt);
+  draw();
+  rafId = requestAnimationFrame(loop);
+}
+
+function update(dt) {
+  if (!player.moving || player.path.length === 0) {
+    player.moving = false;
+    return;
+  }
+  const next = player.path[0];
+  const tx = next.x * TILE + TILE / 2;
+  const ty = next.y * TILE + TILE / 2;
+  const dx = tx - player.px, dy = ty - player.py;
+  const dist = Math.sqrt(dx*dx + dy*dy);
+  const step = SPEED * dt;
+
+  if (dist <= step + 0.5) {
+    player.px = tx;
+    player.py = ty;
+    player.path.shift();
+    if (player.path.length === 0) player.moving = false;
+    // Check artifact collection
+    artifacts.forEach(a => {
+      if (!a.collected && a.x === next.x && a.y === next.y) collectArtifact(a);
+    });
+  } else {
+    player.px += (dx / dist) * step;
+    player.py += (dy / dist) * step;
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+//  INPUT
+// ═══════════════════════════════════════════════════════
+canvas.addEventListener('click', e => {
+  if (!gameActive) return;
+  const rect = canvas.getBoundingClientRect();
+  const tx = Math.floor((e.clientX - rect.left) / TILE);
+  const ty = Math.floor((e.clientY - rect.top)  / TILE);
+  if (tx < 0 || tx >= COLS || ty < 0 || ty >= ROWS) return;
+  if (obstacles.has(`${tx},${ty}`)) return;
+  const curX = Math.round((player.px - TILE/2) / TILE);
+  const curY = Math.round((player.py - TILE/2) / TILE);
+  const path = bfsGrid({ x:curX, y:curY }, { x:tx, y:ty });
+  if (path.length > 1) {
+    player.path   = path.slice(1); // skip current tile
+    player.moving = true;
+  }
+});
+
+// ═══════════════════════════════════════════════════════
+//  ALGORITHMS
+// ═══════════════════════════════════════════════════════
+
+/* ── BFS Grid pathfinding ── */
+function bfsGrid(start, end) {
+  const queue = [[{ x:start.x, y:start.y }]];
+  const seen  = new Set([`${start.x},${start.y}`]);
+  const dirs  = [[1,0],[-1,0],[0,1],[0,-1]];
+  while (queue.length) {
+    const path = queue.shift();
+    const cur  = path[path.length - 1];
+    if (cur.x === end.x && cur.y === end.y) return path;
+    for (const [dx, dy] of dirs) {
+      const nx = cur.x + dx, ny = cur.y + dy;
+      const nk = `${nx},${ny}`;
+      if (nx>=0 && nx<COLS && ny>=0 && ny<ROWS && !obstacles.has(nk) && !seen.has(nk)) {
+        seen.add(nk);
+        queue.push([...path, { x:nx, y:ny }]);
+      }
+    }
+  }
+  return [];
+}
+
+/* ── BFS button ── */
+function runBFS() {
+  const cx = Math.round((player.px - TILE/2) / TILE);
+  const cy = Math.round((player.py - TILE/2) / TILE);
+  const path = bfsGrid({ x:cx, y:cy }, base);
+  if (path.length > 0) {
+    bfsPath = path;
+    toast(`BFS: caminho de ${path.length - 1} passos até a base`);
+    document.getElementById('bfs-stat').innerHTML =
+      `<b>Resultado:</b> ${path.length - 1} passos · O(V+E) no grid ${COLS}×${ROWS}`;
+  } else {
+    toast('BFS: nenhum caminho encontrado!');
+    document.getElementById('bfs-stat').textContent = 'Sem caminho disponível.';
+  }
+}
+
+/* ── Euclidean distance ── */
+function edist(a, b) {
+  return Math.sqrt((a.x - b.x)**2 + (a.y - b.y)**2);
+}
+
+/* ── TSP: Held-Karp exact O(n²·2ⁿ) ── */
+function heldKarp(pts) {
+  const n   = pts.length;
+  const INF = 1e18;
+  // Distance matrix
+  const D = Array.from({length:n}, (_, i) =>
+    Array.from({length:n}, (_, j) => edist(pts[i], pts[j]))
+  );
+  const FULL = (1 << n) - 1;
+  const dp  = Array.from({length:1<<n}, () => new Float64Array(n).fill(INF));
+  const par = Array.from({length:1<<n}, () => new Int8Array(n).fill(-1));
+
+  dp[1][0] = 0; // start at node 0, mask = {0}
+
+  for (let mask = 1; mask <= FULL; mask++) {
+    for (let u = 0; u < n; u++) {
+      if (!(mask & (1 << u)) || dp[mask][u] === INF) continue;
+      for (let v = 0; v < n; v++) {
+        if (mask & (1 << v)) continue;
+        const nm = mask | (1 << v);
+        const nd = dp[mask][u] + D[u][v];
+        if (nd < dp[nm][v]) { dp[nm][v] = nd; par[nm][v] = u; }
+      }
+    }
+  }
+
+  // Find best last node (returning to 0)
+  let best = INF, last = -1;
+  for (let u = 1; u < n; u++) {
+    const c = dp[FULL][u] + D[u][0];
+    if (c < best) { best = c; last = u; }
+  }
+
+  // Reconstruct path
+  const path = [];
+  let mask = FULL, cur = last;
+  while (cur !== -1) {
+    path.unshift(cur);
+    const prev = par[mask][cur];
+    mask ^= (1 << cur);
+    cur = prev;
+  }
+  return { order: path, dist: best };
+}
+
+/* ── TSP: Nearest-neighbor + 2-opt heuristic ── */
+function twoOptTSP(pts) {
+  const n = pts.length;
+
+  // Nearest-neighbor initial tour
+  const visited = new Array(n).fill(false);
+  visited[0] = true;
+  const order = [0];
+  for (let i = 1; i < n; i++) {
+    let best = Infinity, nb = -1;
+    for (let j = 0; j < n; j++) {
+      if (!visited[j]) {
+        const d = edist(pts[order[order.length-1]], pts[j]);
+        if (d < best) { best = d; nb = j; }
+      }
+    }
+    visited[nb] = true;
+    order.push(nb);
+  }
+
+  // 2-opt improvement
+  let improved = true;
+  while (improved) {
+    improved = false;
+    for (let i = 1; i < n - 1; i++) {
+      for (let j = i + 1; j < n; j++) {
+        const a = order[i-1], b = order[i], c = order[j], d = order[(j+1) % n];
+        const before = edist(pts[a], pts[b]) + edist(pts[c], pts[d]);
+        const after  = edist(pts[a], pts[c]) + edist(pts[b], pts[d]);
+        if (after < before - 1e-6) {
+          order.splice(i, j - i + 1, ...order.slice(i, j+1).reverse());
+          improved = true;
+        }
+      }
+    }
+  }
+
+  // Calculate total distance including return to start
+  let dist = 0;
+  for (let i = 0; i < n; i++) dist += edist(pts[order[i]], pts[order[(i+1)%n]]);
+  return { order, dist };
+}
+
+/* ── Run TSP ── */
+function runTSP() {
+  const remaining = artifacts.filter(a => !a.collected);
+  if (remaining.length < 2) {
+    toast(remaining.length === 0 ? 'Nenhum artefato restante!' : 'Precisa de ≥ 2 artefatos para TSP.');
+    return;
+  }
+
+  const nodes = [base, ...remaining];
+  const n = nodes.length;
+  const useExact = (n - 1) <= 12; // node[0] = base, artifacts are nodes[1..n-1]
+
+  let result;
+  if (useExact) {
+    result = heldKarp(nodes);
+  } else {
+    result = twoOptTSP(nodes);
+  }
+
+  tspRoute = result.order.map(i => nodes[i]);
+  const algo = useExact ? `Held-Karp exato` : `2-opt heurística`;
+  const dist = result.dist.toFixed(1);
+
+  document.getElementById('map-info').style.display = 'block';
+  document.getElementById('mi-algo').textContent  = algo;
+  document.getElementById('mi-dist').textContent  = `${dist} tiles`;
+  document.getElementById('h-tsp-dist').style.display = '';
+  document.getElementById('h-dist').textContent   = dist;
+  document.getElementById('tsp-stat').innerHTML   =
+    `<b>Algoritmo:</b> ${algo}<br><b>Distância:</b> ${dist} tiles · <b>Artefatos:</b> ${remaining.length}`;
+
+  toast(`Rota TSP calculada! ${algo} — ${dist} tiles`);
+}
+
+/* ── Knapsack 0/1 ── */
+function knapsack01(items, capacity) {
+  const n  = items.length;
+  const dp = Array.from({length: n+1}, () => new Array(capacity+1).fill(0));
+  for (let i = 1; i <= n; i++) {
+    for (let w = 0; w <= capacity; w++) {
+      dp[i][w] = dp[i-1][w];
+      if (items[i-1].weight <= w)
+        dp[i][w] = Math.max(dp[i][w], dp[i-1][w - items[i-1].weight] + items[i-1].value);
+    }
+  }
+  // Backtrack chosen items
+  const chosen = new Set();
+  let w = capacity;
+  for (let i = n; i > 0; i--) {
+    if (dp[i][w] !== dp[i-1][w]) { chosen.add(i-1); w -= items[i-1].weight; }
+  }
+  return { totalValue: dp[n][capacity], chosen };
+}
+
+/* ── Collect artifact ── */
+function collectArtifact(art) {
+  // Tentatively add to inventory
+  const candidates = [...inventory, art];
+  const { chosen, totalValue } = knapsack01(candidates, MAX_WEIGHT);
+
+  if (chosen.has(candidates.length - 1)) {
+    // Item selected by Knapsack — update inventory
+    const dropped = [];
+    inventory = candidates.filter((_, i) => {
+      if (chosen.has(i)) return true;
+      if (i < candidates.length - 1) dropped.push(candidates[i]);
+      return false;
+    });
+    art.collected = true;
+    totalScore += art.value;
+
+    if (dropped.length > 0) {
+      toast(`${art.emoji} Coletado! Knapsack descartou: ${dropped.map(d=>d.emoji).join('')}`);
+    } else {
+      toast(`${art.emoji} ${art.name} coletado! +${art.value} pts`);
+    }
+
+    const curW = inventory.reduce((s, i) => s + i.weight, 0);
+    document.getElementById('knap-stat').innerHTML =
+      `<b>${inventory.length} itens</b> · Valor: ${totalValue} pts · Peso: ${curW}/${MAX_WEIGHT} kg`;
+
+  } else {
+    toast(`❌ ${art.name} muito pesado! Inventário cheio.`);
+    art.collected = false; // Don't collect
+    return;
+  }
+
+  // Remove from TSP route if present
+  tspRoute = tspRoute.filter(r => !(r.x === art.x && r.y === art.y));
+
+  updateHUD();
+  renderInventory();
+  checkLevelComplete();
+}
+
+function checkLevelComplete() {
+  if (artifacts.every(a => a.collected)) {
+    setTimeout(showVictory, 400);
+  }
+}
+
+function showVictory() {
+  const inv = inventory.reduce((s, i) => s + i.value, 0);
+  const w   = inventory.reduce((s, i) => s + i.weight, 0);
+  document.getElementById('modal-content').innerHTML = `
+    <div class="modal-icon">🏆</div>
+    <h2>Nível ${level} completo!</h2>
+    <p>Todos os artefatos coletados! Excelente trabalho, arqueólogo.</p>
+    <div class="big">${totalScore} pts</div>
+    <p style="font-size:13px">Inventário: ${inventory.length} itens · ${w} kg · ${inv} pts de valor</p>
+    <div class="modal-btns" style="margin-top:16px">
+      <button class="btn accent" onclick="advanceLevel()" style="font-size:14px;padding:10px 28px">
+        ⛏️ Próximo Nível →
+      </button>
+    </div>`;
+  document.getElementById('overlay').style.display = 'flex';
+}
+
+function advanceLevel() {
+  level++;
+  inventory = [];
+  document.getElementById('overlay').style.display = 'none';
+  buildLevel();
+}
+
+function nextLevel() {
+  advanceLevel();
+}
+
+function clearRoutes() {
+  tspRoute = [];
+  bfsPath  = [];
+  document.getElementById('map-info').style.display = 'none';
+  document.getElementById('h-tsp-dist').style.display = 'none';
+  document.getElementById('tsp-stat').textContent = 'Rota limpa.';
+  document.getElementById('bfs-stat').textContent = 'Caminho limpo.';
+}
+
+// ═══════════════════════════════════════════════════════
+//  RENDER
+// ═══════════════════════════════════════════════════════
+function draw() {
+  ctx.clearRect(0, 0, CW, CH);
+
+  // Map background
+  ctx.fillStyle = '#0a0e14';
+  ctx.fillRect(0, 0, CW, CH);
+
+  // Subtle grid
+  ctx.strokeStyle = 'rgba(255,255,255,0.025)';
+  ctx.lineWidth = 0.5;
+  for (let x = 0; x < COLS; x++) {
+    ctx.beginPath(); ctx.moveTo(x*TILE, 0); ctx.lineTo(x*TILE, CH); ctx.stroke();
+  }
+  for (let y = 0; y < ROWS; y++) {
+    ctx.beginPath(); ctx.moveTo(0, y*TILE); ctx.lineTo(CW, y*TILE); ctx.stroke();
+  }
+
+  // Obstacles
+  obstacles.forEach(k => {
+    const [ox, oy] = k.split(',').map(Number);
+    ctx.fillStyle = '#1a2236';
+    ctx.fillRect(ox*TILE, oy*TILE, TILE, TILE);
+    ctx.fillStyle = '#111827';
+    ctx.fillRect(ox*TILE+5, oy*TILE+5, TILE-10, TILE-10);
+    // Cross marks on obstacles
+    ctx.strokeStyle = 'rgba(255,255,255,0.04)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(ox*TILE+8, oy*TILE+8); ctx.lineTo(ox*TILE+TILE-8, oy*TILE+TILE-8);
+    ctx.moveTo(ox*TILE+TILE-8, oy*TILE+8); ctx.lineTo(ox*TILE+8, oy*TILE+TILE-8);
+    ctx.stroke();
+  });
+
+  // BFS path
+  if (bfsPath.length > 1) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(63,185,80,0.45)';
+    ctx.lineWidth   = 2.5;
+    ctx.setLineDash([5, 5]);
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    bfsPath.forEach((p, i) => {
+      const px = p.x * TILE + TILE/2, py = p.y * TILE + TILE/2;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+    // BFS dots
+    bfsPath.forEach((p, i) => {
+      if (i === 0 || i === bfsPath.length-1) return;
+      const px = p.x * TILE + TILE/2, py = p.y * TILE + TILE/2;
+      ctx.fillStyle = 'rgba(63,185,80,0.35)';
+      ctx.beginPath(); ctx.arc(px, py, 3, 0, Math.PI*2); ctx.fill();
+    });
+  }
+
+  // TSP route
+  if (tspRoute.length > 1) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(88,166,255,0.65)';
+    ctx.lineWidth   = 2.5;
+    ctx.setLineDash([7, 4]);
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    tspRoute.forEach((p, i) => {
+      const px = p.x * TILE + TILE/2, py = p.y * TILE + TILE/2;
+      i === 0 ? ctx.moveTo(px, py) : ctx.lineTo(px, py);
+    });
+    // Close loop back to start
+    ctx.lineTo(tspRoute[0].x * TILE + TILE/2, tspRoute[0].y * TILE + TILE/2);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+
+    // Step numbers on route
+    tspRoute.forEach((p, i) => {
+      if (i === 0) return; // skip base node
+      const px = p.x * TILE + TILE/2, py = p.y * TILE + TILE/2;
+      ctx.fillStyle = '#1a3a6a';
+      ctx.beginPath(); ctx.arc(px, py, 11, 0, Math.PI*2); ctx.fill();
+      ctx.strokeStyle = '#58a6ff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle   = '#58a6ff';
+      ctx.font        = 'bold 10px system-ui';
+      ctx.textAlign   = 'center';
+      ctx.textBaseline= 'middle';
+      ctx.fillText(i, px, py);
+    });
+  }
+
+  // Player movement preview
+  if (player.path.length > 0) {
+    ctx.save();
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth   = 1.5;
+    ctx.setLineDash([3, 3]);
+    ctx.beginPath();
+    ctx.moveTo(player.px, player.py);
+    player.path.forEach(p => ctx.lineTo(p.x * TILE + TILE/2, p.y * TILE + TILE/2));
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // Base camp
+  {
+    const bx = base.x * TILE + TILE/2, by = base.y * TILE + TILE/2;
+    ctx.fillStyle = 'rgba(63,185,80,0.12)';
+    ctx.beginPath(); ctx.arc(bx, by, TILE * 0.9, 0, Math.PI*2); ctx.fill();
+    ctx.strokeStyle = 'rgba(63,185,80,0.35)';
+    ctx.lineWidth   = 1.5;
+    ctx.beginPath(); ctx.arc(bx, by, TILE * 0.9, 0, Math.PI*2); ctx.stroke();
+    ctx.font = `${TILE * 0.65}px system-ui`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🏕️', bx, by);
+    // Label
+    ctx.fillStyle = 'rgba(63,185,80,0.8)';
+    ctx.font = 'bold 9px system-ui';
+    ctx.fillText('BASE', bx, by + TILE * 0.72);
+  }
+
+  // Artifacts
+  artifacts.forEach(a => {
+    if (a.collected) return;
+    const ax = a.x * TILE + TILE/2, ay = a.y * TILE + TILE/2;
+
+    // Pulsing glow
+    const pulse = 0.5 + 0.5 * Math.sin(performance.now() / 600 + a.id);
+    ctx.fillStyle = a.color + Math.round(20 + pulse * 20).toString(16).padStart(2,'0');
+    ctx.beginPath(); ctx.arc(ax, ay, TILE * 0.7, 0, Math.PI*2); ctx.fill();
+
+    ctx.fillStyle = a.color + '50';
+    ctx.beginPath(); ctx.arc(ax, ay, TILE * 0.5, 0, Math.PI*2); ctx.fill();
+
+    // Emoji
+    ctx.font = `${TILE * 0.68}px system-ui`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(a.emoji, ax, ay);
+
+    // Value badge
+    const badgeW = 30;
+    ctx.fillStyle = 'rgba(0,0,0,0.75)';
+    const bx2 = ax - badgeW/2, by2 = ay + TILE * 0.42;
+    roundRect(ctx, bx2, by2, badgeW, 14, 3);
+    ctx.fill();
+    ctx.fillStyle = '#f0a500';
+    ctx.font = 'bold 9px system-ui';
+    ctx.fillText(`${a.value}pt`, ax, by2 + 7);
+
+    // Weight badge
+    const wbw = 28;
+    ctx.fillStyle = 'rgba(0,0,0,0.65)';
+    roundRect(ctx, ax - wbw/2, by2 + 16, wbw, 13, 3);
+    ctx.fill();
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '8px system-ui';
+    ctx.fillText(`${a.weight}kg`, ax, by2 + 22);
+  });
+
+  // Player
+  {
+    // Shadow
+    ctx.fillStyle = 'rgba(240,165,0,0.15)';
+    ctx.beginPath();
+    ctx.ellipse(player.px, player.py + TILE*0.3, TILE*0.35, TILE*0.1, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.font = `${TILE * 0.78}px system-ui`;
+    ctx.textAlign    = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🧑‍🔬', player.px, player.py);
+  }
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x+w, y, x+w, y+r, r);
+  ctx.lineTo(x+w, y+h-r);
+  ctx.arcTo(x+w, y+h, x+w-r, y+h, r);
+  ctx.lineTo(x+r, y+h);
+  ctx.arcTo(x, y+h, x, y+h-r, r);
+  ctx.lineTo(x, y+r);
+  ctx.arcTo(x, y, x+r, y, r);
+  ctx.closePath();
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════════
+function updateHUD() {
+  const col = artifacts.filter(a => a.collected).length;
+  const tot = artifacts.length;
+  document.getElementById('h-pts').textContent = totalScore;
+  document.getElementById('h-col').textContent = col;
+  document.getElementById('h-tot').textContent = tot;
+}
+
+function renderInventory() {
+  const curW = inventory.reduce((s, i) => s + i.weight, 0);
+  const pct  = Math.min(100, curW / MAX_WEIGHT * 100);
+  document.getElementById('w-cur').textContent = curW;
+  document.getElementById('w-max').textContent = MAX_WEIGHT;
+  document.getElementById('wbar').style.width  = pct + '%';
+  document.getElementById('wbar').className    = 'wbar-fill' + (pct >= 90 ? ' danger' : '');
+
+  const el = document.getElementById('inv-list');
+  if (inventory.length === 0) {
+    el.innerHTML = '<div class="inv-empty">Inventário vazio — colete artefatos!</div>';
+    return;
+  }
+  el.innerHTML = inventory.map(item => `
+    <div class="inv-item">
+      <div class="inv-emoji">${item.emoji}</div>
+      <div class="inv-name">${item.name}</div>
+      <div class="inv-tags">
+        <span class="tag weight">${item.weight}kg</span>
+        <span class="tag value">${item.value}pt</span>
+      </div>
+    </div>
+  `).join('');
+}
+
+function toast(msg) {
+  clearTimeout(toastTimer);
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('on');
+  toastTimer = setTimeout(() => el.classList.remove('on'), 2800);
+}
+
+function rnd(n) { return Math.floor(Math.random() * n); }
+
+// Initial resize
+resize();
+</script>
+</body>
+</html>
